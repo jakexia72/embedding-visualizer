@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Embeddings Visualizer</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <!-- D3.js for visualization -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- Custom CSS -->
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/visualization.css') }}"
+    />
+    <style>
+      body {
+        padding-top: 20px;
+        padding-bottom: 40px;
+      }
+      .container {
+        max-width: 1200px;
+      }
+      .card {
+        margin-bottom: 20px;
+      }
+      .saved-embedding-item {
+        cursor: pointer;
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+      }
+      .saved-embedding-item:hover {
+        background-color: #f8f9fa;
+      }
+      .nav-tabs {
+        margin-bottom: 15px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1 class="text-center mb-4">Embeddings Visualizer</h1>
+
+      <div class="row">
+        <div class="col-md-4">
+          <ul class="nav nav-tabs" id="dataTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button
+                class="nav-link active"
+                id="upload-tab"
+                data-bs-toggle="tab"
+                data-bs-target="#upload-tab-pane"
+                type="button"
+                role="tab"
+                aria-controls="upload-tab-pane"
+                aria-selected="true"
+              >
+                Upload Data
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button
+                class="nav-link"
+                id="saved-tab"
+                data-bs-toggle="tab"
+                data-bs-target="#saved-tab-pane"
+                type="button"
+                role="tab"
+                aria-controls="saved-tab-pane"
+                aria-selected="false"
+              >
+                Saved Embeddings
+              </button>
+            </li>
+          </ul>
+
+          <div class="tab-content" id="dataTabsContent">
+            <!-- Upload Data Tab -->
+            <div
+              class="tab-pane fade show active"
+              id="upload-tab-pane"
+              role="tabpanel"
+              aria-labelledby="upload-tab"
+              tabindex="0"
+            >
+              <div class="card">
+                <div class="card-header">
+                  <h5>Upload Data</h5>
+                </div>
+                <div class="card-body">
+                  <form id="upload-form" enctype="multipart/form-data">
+                    <div class="mb-3">
+                      <label for="file" class="form-label">CSV File</label>
+                      <input
+                        type="file"
+                        class="form-control"
+                        id="file"
+                        name="file"
+                        accept=".csv"
+                        required
+                      />
+                      <div class="form-text">
+                        Upload a CSV file containing text data.
+                      </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                      Upload
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+
+            <!-- Saved Embeddings Tab -->
+            <div
+              class="tab-pane fade"
+              id="saved-tab-pane"
+              role="tabpanel"
+              aria-labelledby="saved-tab"
+              tabindex="0"
+            >
+              <div class="card">
+                <div class="card-header">
+                  <h5>Saved Embeddings</h5>
+                </div>
+                <div class="card-body">
+                  <div id="saved-embeddings-list">
+                    {% if saved_embeddings %} {% for embedding in
+                    saved_embeddings %}
+                    <div
+                      class="saved-embedding-item"
+                      data-id="{{ embedding.id }}"
+                    >
+                      <h6>{{ embedding.name }}</h6>
+                      <div><small>Model: {{ embedding.model }}</small></div>
+                      <div>
+                        <small>Documents: {{ embedding.num_documents }}</small>
+                      </div>
+                      <div><small>Date: {{ embedding.date }}</small></div>
+                    </div>
+                    {% endfor %} {% else %}
+                    <p>No saved embeddings found.</p>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" id="processing-options" style="display: none">
+            <div class="card-header">
+              <h5>Processing Options</h5>
+            </div>
+            <div class="card-body">
+              <form id="process-form">
+                <!-- Hidden field for embedding ID if loading saved embedding -->
+                <input
+                  type="hidden"
+                  id="embedding-id"
+                  name="embedding_id"
+                  value=""
+                />
+
+                <div class="mb-3">
+                  <label for="text-column" class="form-label"
+                    >Text Column</label
+                  >
+                  <select
+                    class="form-select"
+                    id="text-column"
+                    name="text_column"
+                    required
+                  >
+                    <!-- Will be populated dynamically -->
+                  </select>
+                </div>
+
+                <div class="mb-3">
+                  <label for="model" class="form-label">Embedding Model</label>
+                  <select class="form-select" id="model" name="model" required>
+                    {% for key, value in embedding_models.items() %}
+                    <option value="{{ key }}">{{ value }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+
+                <div class="mb-3">
+                  <label for="dim-reduction" class="form-label"
+                    >Dimensionality Reduction</label
+                  >
+                  <select
+                    class="form-select"
+                    id="dim-reduction"
+                    name="dim_reduction"
+                    required
+                  >
+                    {% for key, value in dim_reduction.items() %}
+                    <option value="{{ key }}">{{ value }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+
+                <div class="mb-3">
+                  <label for="clustering" class="form-label"
+                    >Clustering Method</label
+                  >
+                  <select
+                    class="form-select"
+                    id="clustering"
+                    name="clustering"
+                    required
+                  >
+                    {% for key, value in clustering.items() %}
+                    <option value="{{ key }}">{{ value }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+
+                <div id="kmeans-params">
+                  <div class="mb-3">
+                    <label for="n-clusters" class="form-label"
+                      >Number of Clusters</label
+                    >
+                    <input
+                      type="number"
+                      class="form-control"
+                      id="n-clusters"
+                      name="n_clusters"
+                      value="5"
+                      min="2"
+                      max="50"
+                    />
+                  </div>
+                </div>
+
+                <div id="dbscan-params" style="display: none">
+                  <div class="mb-3">
+                    <label for="eps" class="form-label">Epsilon (EPS)</label>
+                    <input
+                      type="number"
+                      class="form-control"
+                      id="eps"
+                      name="eps"
+                      value="0.5"
+                      min="0.1"
+                      max="10"
+                      step="0.1"
+                    />
+                  </div>
+                  <div class="mb-3">
+                    <label for="min-samples" class="form-label"
+                      >Min Samples</label
+                    >
+                    <input
+                      type="number"
+                      class="form-control"
+                      id="min-samples"
+                      name="min_samples"
+                      value="5"
+                      min="2"
+                      max="50"
+                    />
+                  </div>
+                </div>
+
+                <div id="hdbscan-params" style="display: none">
+                  <div class="mb-3">
+                    <label for="min-cluster-size" class="form-label"
+                      >Min Cluster Size</label
+                    >
+                    <input
+                      type="number"
+                      class="form-control"
+                      id="min-cluster-size"
+                      name="min_samples"
+                      value="5"
+                      min="2"
+                      max="50"
+                    />
+                  </div>
+                </div>
+
+                <!-- Option to save embeddings -->
+                <div class="mb-3 form-check" id="save-embeddings-container">
+                  <input
+                    type="checkbox"
+                    class="form-check-input"
+                    id="save-embedding"
+                    name="save_embedding"
+                    checked
+                  />
+                  <label class="form-check-label" for="save-embedding"
+                    >Save embeddings for future use</label
+                  >
+                </div>
+
+                <button type="submit" class="btn btn-primary">
+                  Process Data
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-8">
+          <div class="card">
+            <div class="card-header">
+              <h5>Visualization</h5>
+            </div>
+            <div class="card-body">
+              <div
+                class="loading"
+                id="loading"
+                style="display: none; text-align: center; margin: 20px 0"
+              >
+                <div class="spinner-border text-primary" role="status">
+                  <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">
+                  Processing data... This may take a few minutes.
+                </p>
+              </div>
+              <div id="visualization"></div>
+            </div>
+          </div>
+
+          <!-- Cluster Table -->
+          <div class="card" id="cluster-table-card" style="display: none">
+            <div class="card-header">
+              <h5>Cluster Contents</h5>
+            </div>
+            <div class="card-body">
+              <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                  <thead>
+                    <tr>
+                      <th>Cluster</th>
+                      <th>Size</th>
+                      <th>Sample Items</th>
+                    </tr>
+                  </thead>
+                  <tbody id="cluster-table-body">
+                    <!-- Will be populated dynamically -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" id="stats-card" style="display: none">
+            <div class="card-header">
+              <h5>Statistics</h5>
+            </div>
+            <div class="card-body">
+              <div id="stats"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Custom visualization script -->
+    <script src="{{ url_for('static', filename='js/visualization.js') }}"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const uploadForm = document.getElementById("upload-form");
+        const processForm = document.getElementById("process-form");
+        const processingOptions = document.getElementById("processing-options");
+        const textColumnSelect = document.getElementById("text-column");
+        const modelSelect = document.getElementById("model");
+        const dimReductionSelect = document.getElementById("dim-reduction");
+        const clusteringSelect = document.getElementById("clustering");
+        const kmeansParams = document.getElementById("kmeans-params");
+        const dbscanParams = document.getElementById("dbscan-params");
+        const hdbscanParams = document.getElementById("hdbscan-params");
+        const loading = document.getElementById("loading");
+        const visualization = document.getElementById("visualization");
+        const statsCard = document.getElementById("stats-card");
+        const statsDiv = document.getElementById("stats");
+        const clusterTableCard = document.getElementById("cluster-table-card");
+        const clusterTableBody = document.getElementById("cluster-table-body");
+        const savedEmbeddingsList = document.getElementById(
+          "saved-embeddings-list"
+        );
+        const saveEmbeddingsContainer = document.getElementById(
+          "save-embeddings-container"
+        );
+        const embeddingIdInput = document.getElementById("embedding-id");
+
+        // Handle file upload
+        uploadForm.addEventListener("submit", function (e) {
+          e.preventDefault();
+
+          const formData = new FormData(uploadForm);
+
+          fetch("/upload", {
+            method: "POST",
+            body: formData,
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              if (data.success) {
+                // Populate text column select
+                textColumnSelect.innerHTML = "";
+                data.columns.forEach((column) => {
+                  const option = document.createElement("option");
+                  option.value = column;
+                  option.textContent = column;
+                  textColumnSelect.appendChild(option);
+                });
+
+                // Show processing options
+                processingOptions.style.display = "block";
+
+                // Reset embedding ID
+                embeddingIdInput.value = "";
+
+                // Show save embeddings option
+                saveEmbeddingsContainer.style.display = "block";
+
+                // Enable model selection
+                modelSelect.disabled = false;
+              } else {
+                alert(data.error);
+              }
+            })
+            .catch((error) => {
+              console.error("Error:", error);
+              alert("An error occurred during upload.");
+            });
+        });
+
+        // Handle saved embedding click
+        if (savedEmbeddingsList) {
+          const savedEmbeddingItems = savedEmbeddingsList.querySelectorAll(
+            ".saved-embedding-item"
+          );
+          savedEmbeddingItems.forEach((item) => {
+            item.addEventListener("click", function () {
+              const embeddingId = this.getAttribute("data-id");
+
+              fetch("/load_embedding", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ embedding_id: embeddingId }),
+              })
+                .then((response) => response.json())
+                .then((data) => {
+                  if (data.success) {
+                    // Populate text column select
+                    textColumnSelect.innerHTML = "";
+                    data.columns.forEach((column) => {
+                      const option = document.createElement("option");
+                      option.value = column;
+                      option.textContent = column;
+                      textColumnSelect.appendChild(option);
+                    });
+
+                    // Set the text column if available
+                    if (data.text_column) {
+                      textColumnSelect.value = data.text_column;
+                    }
+
+                    // Set the model if available
+                    if (data.model) {
+                      modelSelect.value = data.model;
+                    }
+
+                    // Disable model selection since we're using saved embeddings
+                    modelSelect.disabled = true;
+
+                    // Set the embedding ID
+                    embeddingIdInput.value = embeddingId;
+
+                    // Hide save embeddings option
+                    saveEmbeddingsContainer.style.display = "none";
+
+                    // Show processing options
+                    processingOptions.style.display = "block";
+                  } else {
+                    alert(data.error);
+                  }
+                })
+                .catch((error) => {
+                  console.error("Error:", error);
+                  alert("An error occurred while loading the embedding.");
+                });
+            });
+          });
+        }
+
+        // Handle clustering method change
+        clusteringSelect.addEventListener("change", function () {
+          const method = this.value;
+
+          kmeansParams.style.display = method === "kmeans" ? "block" : "none";
+          dbscanParams.style.display = method === "dbscan" ? "block" : "none";
+          hdbscanParams.style.display = method === "hdbscan" ? "block" : "none";
+        });
+
+        // Handle data processing
+        processForm.addEventListener("submit", function (e) {
+          e.preventDefault();
+
+          // Show loading indicator
+          loading.style.display = "block";
+          visualization.innerHTML = "";
+          statsCard.style.display = "none";
+
+          // Get form data
+          const formData = new FormData(processForm);
+          const data = {};
+          formData.forEach((value, key) => {
+            data[key] = value;
+          });
+
+          fetch("/process", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(data),
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              // Hide loading indicator
+              loading.style.display = "none";
+
+              if (data.success) {
+                // Initialize the custom visualization
+                initVisualization(data.visualization_data);
+
+                // Display statistics
+                statsDiv.innerHTML = `
+                <p><strong>Number of Documents:</strong> ${data.stats.num_documents}</p>
+                <p><strong>Number of Clusters:</strong> ${data.stats.num_clusters}</p>
+                <p><strong>Noise Points:</strong> ${data.stats.noise_points}</p>
+              `;
+
+                // If embeddings were saved, show a message
+                if (data.embedding_id) {
+                  statsDiv.innerHTML += `
+                  <div class="alert alert-success mt-3">
+                    Embeddings saved successfully! You can access them later from the "Saved Embeddings" tab.
+                  </div>
+                `;
+                }
+
+                statsCard.style.display = "block";
+
+                // Populate cluster table
+                populateClusterTable(data.visualization_data.cluster_summaries);
+                clusterTableCard.style.display = "block";
+              } else {
+                alert(data.error);
+              }
+            })
+            .catch((error) => {
+              loading.style.display = "none";
+              console.error("Error:", error);
+              alert("An error occurred during processing.");
+            });
+        });
+
+        // Function to populate the cluster table
+        function populateClusterTable(clusterSummaries) {
+          clusterTableBody.innerHTML = "";
+
+          clusterSummaries.forEach((cluster) => {
+            const row = document.createElement("tr");
+
+            // Cluster ID cell
+            const clusterIdCell = document.createElement("td");
+            clusterIdCell.textContent =
+              cluster.cluster_id === -1
+                ? "Noise"
+                : `Cluster ${cluster.cluster_id}`;
+            row.appendChild(clusterIdCell);
+
+            // Size cell
+            const sizeCell = document.createElement("td");
+            sizeCell.textContent = cluster.size;
+            row.appendChild(sizeCell);
+
+            // Sample items cell
+            const sampleItemsCell = document.createElement("td");
+            if (cluster.sample_items.length > 0) {
+              const itemsList = document.createElement("ul");
+              itemsList.className = "list-unstyled";
+
+              cluster.sample_items.forEach((item) => {
+                const listItem = document.createElement("li");
+                listItem.className = "mb-2";
+                listItem.textContent = item.text;
+                itemsList.appendChild(listItem);
+              });
+
+              sampleItemsCell.appendChild(itemsList);
+            } else {
+              sampleItemsCell.textContent = "No items";
+            }
+            row.appendChild(sampleItemsCell);
+
+            clusterTableBody.appendChild(row);
+          });
+        }
+      });
+    </script>
+  </body>
+</html>
