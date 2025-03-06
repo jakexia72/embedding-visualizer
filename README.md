@@ -1,4 +1,5 @@
-https://github.com/user-attachments/assets/4b5b37da-9209-4473-9dca-0016495c8443
+https://github.com/user-attachments/assets/b1d7752a-a9d1-4d14-bd4d-7f1a529335a3
+
 # Embeddings Visualizer
 
 A simple application to visualize text embeddings from CSV files using various clustering techniques.
